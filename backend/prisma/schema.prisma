@@ -1,0 +1,167 @@
+// DIETER AND ED AI - Prisma Database Schema
+// Merging AI Music Hub (Manus.space) + DIETER PRO (Arena.site)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  PREMIUM
+}
+
+enum TrackStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  username    String   @unique
+  password    String
+  role        Role     @default(USER)
+  bio         String?
+  avatar      String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  musicTracks   MusicTrack[]
+  videoProjects VideoProject[]
+  playlists     Playlist[]
+  collaborations Collaboration[]
+
+  @@map("users")
+}
+
+model MusicTrack {
+  id          String      @id @default(cuid())
+  userId      String
+  title       String
+  prompt      String      @db.Text
+  style       String?
+  tempo       Int?
+  musicKey    String?     @map("key")
+  instruments String[]
+  audioUrl    String?
+  duration    Float?
+  status      TrackStatus @default(COMPLETED)
+  isPublic    Boolean     @default(false)
+  plays       Int         @default(0)
+  likes       Int         @default(0)
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoProjects VideoProject[]
+  playlists     PlaylistTrack[]
+
+  @@map("music_tracks")
+}
+
+model VideoProject {
+  id           String      @id @default(cuid())
+  userId       String
+  title        String
+  prompt       String      @db.Text
+  style        String?
+  videoUrl     String?
+  thumbnailUrl String?
+  duration     Float?
+  resolution   String?
+  aspectRatio  String?     @default("16:9")
+  audioTrackId String?
+  status       TrackStatus @default(COMPLETED)
+  isPublic     Boolean     @default(false)
+  views        Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audioTrack MusicTrack? @relation(fields: [audioTrackId], references: [id])
+
+  @@map("video_projects")
+}
+
+model Playlist {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean  @default(false)
+  coverImage  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks PlaylistTrack[]
+
+  @@map("playlists")
+}
+
+model PlaylistTrack {
+  id         String   @id @default(cuid())
+  playlistId String
+  trackId    String
+  order      Int      @default(0)
+  addedAt    DateTime @default(now())
+
+  playlist Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track    MusicTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, trackId])
+  @@map("playlist_tracks")
+}
+
+model Collaboration {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  role      String   @default("viewer")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("collaborations")
+}
+
+model PerformanceMetric {
+  id         String   @id @default(cuid())
+  endpoint   String
+  method     String
+  statusCode Int
+  duration   Float
+  userId     String?
+  timestamp  DateTime @default(now())
+  metadata   Json?
+
+  @@map("performance_metrics")
+}
+
+model AILearningLog {
+  id            String   @id @default(cuid())
+  action        String
+  inputData     Json?
+  outputData    Json?
+  success       Boolean
+  errorMessage  String?
+  processingTime Float?
+  modelVersion  String?
+  createdAt     DateTime @default(now())
+
+  @@map("ai_learning_logs")
+}
