@@ -1,0 +1,108 @@
+name: DIETER AND ED AI - CI/CD Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  test-and-build:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm install
+
+      - name: Install backend dependencies
+        run: cd backend && npm install
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_APP_NAME: 'DIETER AND ED AI'
+
+      - name: Build backend
+        run: cd backend && npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+          retention-days: 1
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm install
+
+      - name: Deploy to Vercel
+        run: |
+          cd frontend
+          vercel --prod --token=${{ secrets.VERCEL_TOKEN }} \
+            --env VITE_API_URL=${{ secrets.VITE_API_URL }} \
+            --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  deploy-backend:
+    name: Deploy Backend to Railway
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: |
+          cd backend
+          railway up --service dieter-ed-ai-backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  notify:
+    name: Deployment Notification
+    needs: [deploy-frontend, deploy-backend]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify Success
+        if: ${{ needs.deploy-frontend.result == 'success' && needs.deploy-backend.result == 'success' }}
+        run: echo "DIETER AND ED AI deployed successfully!"
